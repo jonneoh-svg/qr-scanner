@@ -2,8 +2,6 @@
 <html>
 <head>
   <title>QR Scanner</title>
-
-  <!-- QR library -->
   <script src="https://unpkg.com/html5-qrcode"></script>
 
   <style>
@@ -12,23 +10,22 @@
       background: black;
       color: white;
       text-align: center;
-      font-family: Arial, sans-serif;
+      font-family: Arial;
     }
 
     #reader {
       width: 100vw;
-      height: 80vh;
+      height: 70vh;
     }
 
     #result {
+      font-size: 20px;
       margin-top: 10px;
-      font-size: 16px;
-      padding: 10px;
-      word-wrap: break-word;
     }
 
     #status {
-      font-size: 14px;
+      font-size: 18px;
+      margin-top: 10px;
       color: #aaa;
     }
   </style>
@@ -39,12 +36,12 @@
 <h2>QR Scanner</h2>
 <div id="reader"></div>
 <div id="result">Waiting for scan...</div>
-<div id="status"></div>
+<div id="status">Ready</div>
 
 <script>
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxgyxYJSqTAaFsswUTCGe-mwAKteeiK9O28cGkgvBb3Jlkd7Q0m54olUwZmMS-Oflys/exec";
 
-let scanned = false;
+let scanning = true;
 
 function playBeep() {
     const audio = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
@@ -52,26 +49,35 @@ function playBeep() {
 }
 
 function onScanSuccess(decodedText) {
-    if (scanned) return; // prevent multiple scans
-    scanned = true;
+    if (!scanning) return;
+    scanning = false;
 
     document.getElementById("result").innerText = "Scanned: " + decodedText;
+    document.getElementById("status").innerText = "Saving...";
+
     playBeep();
 
     fetch(SCRIPT_URL + "?data=" + encodeURIComponent(decodedText))
       .then(res => res.text())
       .then(data => {
-          console.log("Server response:", data);
-          document.getElementById("status").innerText = "✅ Saved to Google Sheets";
+          console.log("Saved:", data);
+          document.getElementById("status").innerText = "✅ Saved";
+
+          // Reset for next scan
+          setTimeout(() => {
+              scanning = true;
+              document.getElementById("status").innerText = "Ready";
+          }, 1500);
       })
       .catch(err => {
           console.error(err);
-          document.getElementById("status").innerText = "❌ Error saving data";
+          document.getElementById("status").innerText = "❌ Error";
+          scanning = true;
       });
 }
 
 function onScanError(errorMessage) {
-    // optional: log scan errors
+    // optional logging
     console.log("Scan error:", errorMessage);
 }
 
@@ -80,34 +86,21 @@ const html5QrCode = new Html5Qrcode("reader");
 Html5Qrcode.getCameras()
   .then(devices => {
       if (!devices || devices.length === 0) {
-          document.getElementById("result").innerText = "❌ No camera found";
+          document.getElementById("result").innerText = "No camera found";
           return;
       }
 
-      // Prefer back camera, fallback to last camera
       let cameraId = devices[devices.length - 1].id;
-
-      const backCam = devices.find(d =>
-          d.label.toLowerCase().includes("back") ||
-          d.label.toLowerCase().includes("environment")
-      );
-
-      if (backCam) cameraId = backCam.id;
 
       html5QrCode.start(
           cameraId,
-          {
-              fps: 10,
-              qrbox: { width: 250, height: 250 }
-          },
+          { fps: 10, qrbox: 250 },
           onScanSuccess,
           onScanError
-      ).catch(err => {
-          document.getElementById("result").innerText = "❌ Camera error: " + err;
-      });
+      );
   })
   .catch(err => {
-      document.getElementById("result").innerText = "❌ Camera access failed: " + err;
+      document.getElementById("result").innerText = "Camera error: " + err;
   });
 </script>
 
